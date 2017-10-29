@@ -1,13 +1,20 @@
 #!/bin/bash
+#do not run this script directly; run install.sh as normal user
 #this directory is only present via git clone. Must be clone to home directory
 setup_dir="$HOME/mac-setup"
 binfiles_dir="$setup_dir/binfiles"
 dotfiles_dir="$setup_dir/dotfiles"
 vimfiles_dir="$setup_dir/vimfiles"
+plistfies_dir="$setup_dir/plistfiles"
 bin_install_dir="/usr/local/bin"
 vim_home_dir="$HOME/.vim"
 vim_ftplugin_dir="$vim_home_dir/ftplugin"
 ohmyzsh_dir="$HOME/.oh-my-zsh"
+CURR_USER="$1"
+if [ -z "$CURR_USER" ];then
+  echo "could not get current user"
+  exit 1
+fi
 if [ ! -d "$setup_dir" ];then
   echo "could not find setup directory"
   exit 1
@@ -52,6 +59,24 @@ for dotfile in "$dotfiles_dir"/.*;do
     ln -s "$dotfile" "$HOME" > /dev/null 2>&1
     if [ $? -ne 0 ];then
       echo "could not create alias of $dotfile"
+      exit 1
+    fi
+  fi
+done
+echo "installing plistsfiles"
+for plist in "$plistfies_dir"/*;do
+  if [ -f "$plist" ];then
+    plistname="${plist##*/}"
+    if [ -L "$HOME/$plistname" ] || [ -f "$HOME/$plistname" ];then
+      rm -f "$HOME/$plistname" > /dev/null 2>&1
+      if [ $? -ne 0 ];then
+	echo "could not remove old plist $plistname"
+	exit 1
+      fi
+    fi
+    ln -s "$plist" "$HOME" > /dev/null 2>&1
+    if [ $? -ne 0 ];then
+      echo "could not create alias of $plist"
       exit 1
     fi
   fi
@@ -116,6 +141,17 @@ fi
 if [ -f "$HOME/.zshrc" ] || [ -L "$HOME/.zshrc" ];then
   rm -f "$HOME/.zshrc" > /dev/null 2>&1
 fi
-ln -s "$dotfiles_dir/.zshrc" "$HOME" > /dev/null 2>&1
+#ln -s "$dotfiles_dir/.zshrc" "$HOME" > /dev/null 2>&1
+sudo -u "$USER" cat << EOF > "$HOME/.zshrc"
+export ZSH=/Users/$CURR_USER/.oh-my-zsh
+ZSH_THEME="darkblood"
+plugin=(git)
+source \$ZSH/oh-my-zsh.sh
+
+export LANG=en_US.UTF-8
+export EDITOR='vim'
+export SSH_KEY="$HOME/.ssh/rsa_id"
+PATH=:$PATH
+EOF
 echo "done"
 exit 0
