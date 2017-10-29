@@ -1,0 +1,89 @@
+#!/bin/bash
+
+declare -a objects
+INC="$PWD/include"
+SRC="$PWD/src"
+BUILD="$PWD/build"
+LIB="$PWD/lib"
+source_files="$SRC"/*.c
+object_files="$BUILD"/*.o
+libname="${PWD##*/}"
+soname="lib$libname.so.1"
+outputname="lib$libname.so.1.0.1"
+linkername="lib$libname.so"
+if [ ! -d "$INC" ];then
+  mkdir -p "$INC"
+fi
+if [ ! -d "$SRC" ];then
+  mkdir -p "$SRC"
+fi
+if [ ! -d "$BUILD" ];then
+  mkdir -p "$BUILD"
+else
+  rm -rf "$BUILD"
+  mkdir -p "$BUILD"
+fi
+
+if [ ! -d "$BUILD" ];then
+  exit 1
+fi
+if [ ! -d "$LIB" ];then
+  mkdir -p "$LIB"
+else
+  rm -rf "$LIB"
+  mkdir -p "$LIB"
+fi
+if [ ! -d "$LIB" ];then
+  exit 1
+fi
+for s in $source_files;do
+  if [ -f "$s" ];then
+    name="${s##*/}"
+    name="${name%.*}"
+    gcc -I "$INC" -c -fPIC "$s" -o "$BUILD/$name.o"
+  fi
+done
+for o in $object_files;do
+  if [ -f "$o" ];then
+    objects+=("$o");
+  fi
+done
+if [ "${#objects[@]}" -eq 0 ];then
+  exit 0
+fi
+gcc -shared -W1,-soname,"$soname" -o "$LIB/$outputname" "${objects[@]}"
+if [ -f "/usr/local/lib/$outputname" ];then
+  rm -f "/usr/local/lib/$outputname"
+  if [ $? -ne 0 ];then
+    exit 1
+  fi
+fi
+if [ -L "/usr/local/lib/$soname" ];then
+  rm -f "/usr/local/lib/$soname"
+  if [ $? -ne 0 ];then
+    exit 1
+  fi
+fi
+if [ -L "/usr/local/lib/$linkername" ];then
+  rm -f "/usr/local/lib/$linkername"
+  if [ $? -ne 0 ];then
+    exit 1
+  fi
+fi
+mv "$LIB/$outputname" "/usr/local/lib/$outputname"
+if [ $? -ne 0 ];then
+  exit 1
+fi
+ln -s "/usr/local/lib/$outputname" "/usr/local/lib/$soname"
+ln -s "/usr/local/lib/$soname" "/usr/local/lib/$linkername"
+if [ -d "/usr/local/include/$libname" ];then
+  rm -rf "/usr/local/include/$libname"
+  if [ $? -ne 0 ];then
+    exit 1
+  fi
+fi
+cp -a "$INC" "/usr/local/include/$libname"
+if [ $? -ne 0 ];then
+  exit 1
+fi
+exit 0
