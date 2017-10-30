@@ -1,0 +1,135 @@
+#!/bin/bash
+declare -a objects
+INC_DIR="$PWD/include"
+SRC_DIR="$PWD/src"
+BUILD_DIR="$PWD/build"
+BIN_DIR="$PWD/bin"
+LOCK_DIR="$PWD/lock"
+BIN_INSTALL_DIR="/usr/local/bin"
+CURR_USER=$(whoami)
+BINNAME="${PWD##*/}"
+let BUILD_ERROR_COUNT=0
+if [ -z "$CURR_USER" ];then
+  echo "cannot get current user"
+  exit 1
+elif [ "$CURR_USER" != 'root' ];then
+  echo "user must be root, got $CURR_USER"
+  exit 1
+fi
+
+if [ ! -d "$INC_DIR" ] || [ ! -d "$SRC_DIR" ];then
+  echo "$BINNAME is not a C project"
+  exit 1
+fi
+
+if [ ! -d "$BUILD_DIR" ];then
+  mkdir -p "$BUILD_DIR" > /dev/null 2>&1
+  if [ ! -d "$BUILD_DIR" ];then
+    echo "could not create build directory"
+    exit 1
+  fi
+fi
+
+if [ ! -d "$LOCK_DIR" ];then
+  mkdir -p "$LOCK_DIR" > /dev/null 2>&1
+  if [ ! -d "$LOCK_DIR" ];then
+    echo "could not create lock directory"
+    exit 1
+  fi
+fi
+
+if [ ! -d "$BIN_DIR" ];then
+  mkdir -p "$BIN_DIR" > /dev/null 2>&1
+  if [ ! -d "$BIN_DIR" ];then
+    echo "could not create bin directory"
+    exit 1
+  fi
+fi
+
+which stat > /dev/null 2>&1
+if [ $? -ne 0 ];then
+  echo "an error has occured"
+  exit 1
+fi
+main=
+let maincount=0
+let buildcount=0
+for s in "$SRC_DIR"/*.c;do
+  if [ -f "$s" ];then
+    if grep 'main' "$s" > /dev/null 2>&1;then
+      let maincount++
+      main="$s"
+    fi
+    #check last modification date against stored modification date
+    name="${s##*/}"
+    name="${name%.*}"
+    last_modified=$(stat -f "%Sm" -t %s $s 2> /dev/null )
+    if [ ! -f "$LOCK_DIR/$name" ];then
+      gcc -I "$INC_DIR" -c "$s" -o "$BUILD_DIR/$name.o"
+      if [ $? -ne 0 ];then
+	let BUILD_ERROR_COUNT++
+	continue
+      fi
+      echo "$last_modified" > "$LOCK_DIR/$name"
+      echo "INFO: built $name.c for the first time"
+      let buildcount++
+    else
+      previous_modified=$(cat "$LOCK_DIR/$name")
+      let mod_diff=$((last_modified - previous_modified))
+      if [ $mod_diff -gt 0 ];then
+	if [ -e "$BUILD_DIR/$name.o" ];then
+	  rm -f "$BUILD_DIR/$name.o" > /dev/null 2>&1
+	fi
+	gcc -I "$INC_DIR" -c "$s" -o "$BUILD_DIR/$name.o"
+	if [ $? -ne 0 ];then
+	  let BUILD_ERROR_COUNT++
+	  continue
+	fi
+	echo "$last_modified" > "$LOCK_DIR/$name"
+	echo "INFO: rebuilt $name.c, changed $mod_diff seconds after last built"
+	let buildcount++
+      else
+	echo "INFO: $name.c has not changed"
+      fi
+    fi
+  fi
+done
+
+#if [ "$buildcount" -gt 0 ] && [ "$BUILD_ERROR_COUNT" -eq 0 ] && [ "$maincount" -eq 1 ];then
+if [ "$BUILD_ERROR_COUNT" -eq 0 ] && [ "$maincount" -eq 1 ];then
+  for o in "$BUILD_DIR"/*.o;do
+    if [ -e "$o" ];then
+      #skip files whose source files have been deleted
+      name="${o##*/}"
+      name="${name%.*}"
+      if [ -e "$SRC_DIR/$name.c" ];then
+	objects+=("$o")
+      fi
+    fi
+  done
+  if [ -e "$BIN_DIR/$BINNAME" ];then
+    rm -f "$BIN_DIR/$BINNAME" > /dev/null 2>&1
+  fi
+  if [ "${#objects[@]}" -gt 0 ];then
+    gcc -o "$BIN_DIR/$BINNAME" "${objects[@]}"
+  fi
+else
+  echo "ERROR: refusing to build binfile, no main file or multiple main files detected or errors present"
+fi
+
+if [ -z "$main" ];then
+  echo "ERROR: could not find a file with the main entry function"
+elif [ "$maincount" -gt 1 ];then
+  echo "ERROR: multiple main functions detected"
+else
+  echo "INFO: main function found in $main"
+fi
+if [ "$BUILD_ERROR_COUNT" -gt 0 ];then
+  echo "ERROR: finished building with $BUILD_ERROR_COUNT errors"
+else
+  if [ -e "$BIN_DIR/$BINNAME" ];then
+    echo "INFO: executable created at $BIN_DIR/$BINNAME"
+  fi
+  echo "INFO: finished building"
+fi
+exit 0

@@ -11,6 +11,18 @@ libname="${PWD##*/}"
 soname="lib$libname.so.1"
 outputname="lib$libname.so.1.0.1"
 linkername="lib$libname.so"
+CURR_USER=$(whoami)
+LIB_INSTALL_DIR="/usr/local/lib"
+INCLUDE_INSTALL_DIR="/usr/local/include"
+
+if [ -z "$CURR_USER" ];then
+  echo "cannot get current user"
+  exit 1
+elif [ "$CURR_USER" != 'root' ];then
+  echo "user must be root, got $CURR_USER"
+  exit 1
+fi
+
 if [ ! -d "$INC" ];then
   mkdir -p "$INC"
 fi
@@ -52,37 +64,37 @@ if [ "${#objects[@]}" -eq 0 ];then
   exit 0
 fi
 gcc -shared -W1,-soname,"$soname" -o "$LIB/$outputname" "${objects[@]}"
-if [ -f "/usr/local/lib/$outputname" ];then
-  rm -f "/usr/local/lib/$outputname"
+if [ -f "$LIB_INSTALL_DIR/$outputname" ];then
+  rm -f "$LIB_INSTALL_DIR/$outputname"
   if [ $? -ne 0 ];then
     exit 1
   fi
 fi
-if [ -L "/usr/local/lib/$soname" ];then
-  rm -f "/usr/local/lib/$soname"
+if [ -L "$LIB_INSTALL_DIR/$soname" ];then
+  rm -f "$LIB_INSTALL_DIR/$soname"
   if [ $? -ne 0 ];then
     exit 1
   fi
 fi
-if [ -L "/usr/local/lib/$linkername" ];then
-  rm -f "/usr/local/lib/$linkername"
+if [ -L "$LIB_INSTALL_DIR/$linkername" ];then
+  rm -f "$LIB_INSTALL_DIR/$linkername"
   if [ $? -ne 0 ];then
     exit 1
   fi
 fi
-mv "$LIB/$outputname" "/usr/local/lib/$outputname"
+mv "$LIB/$outputname" "$LIB_INSTALL_DIR/$outputname"
 if [ $? -ne 0 ];then
   exit 1
 fi
-ln -s "/usr/local/lib/$outputname" "/usr/local/lib/$soname"
-ln -s "/usr/local/lib/$soname" "/usr/local/lib/$linkername"
-if [ -d "/usr/local/include/$libname" ];then
-  rm -rf "/usr/local/include/$libname"
+ln -s "$LIB_INSTALL_DIR/$outputname" "$LIB_INSTALL_DIR/$soname"
+ln -s "$LIB_INSTALL_DIR/$soname" "$LIB_INSTALL_DIR/$linkername"
+if [ -d "$INCLUDE_INSTALL_DIR/$libname" ];then
+  rm -rf "$INCLUDE_INSTALL_DIR/$libname"
   if [ $? -ne 0 ];then
     exit 1
   fi
 fi
-cp -a "$INC" "/usr/local/include/$libname"
+cp -a "$INC" "$INCLUDE_INSTALL_DIR/$libname"
 if [ $? -ne 0 ];then
   exit 1
 fi
