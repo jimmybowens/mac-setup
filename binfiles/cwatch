@@ -39,6 +39,9 @@ cleanup_with_errors()
 
 cleanup_exit()
 {
+  if [ -p "/tmp/cwatch-nosub" ];then
+    rm -f "/tmp/cwatch-nosub" > /dev/null 2>&1
+  fi
   exec 3>&-
   exit $error_status
 }
@@ -58,6 +61,23 @@ iscommand()
     fi
   done
   return 1
+}
+parse_file_path()
+{
+  parsed_directory_path=
+  parsed_file_path=
+  parsed_file_name=
+  if [ -z "$1" ];then
+    return 1
+  elif [ "$#" -gt 1 ];then
+    return 1
+  fi
+  local file="$1"
+  shift
+  parsed_directory_path="${file%/*}"
+  parsed_file_path="${file%.*}"
+  parsed_file_name="${parsed_file_path##*/}"
+  return 0
 }
 
 dep(){
@@ -93,23 +113,17 @@ sub()
     subholder+=("$1")
     shift
   done
-  if [ -p "/tmp/cwatch-nosub" ];then
-    rm -f "/tmp/cwatch-nosub" > /dev/null 2>&1
-    exec 3>&-
-  fi
-  mkfifo "/tmp/cwatch-nosub" > /dev/null 2>&1
   if [ ! -p "/tmp/cwatch-nosub" ];then
-    die "could not create pipe"
+    mkfifo "/tmp/cwatch-nosub" > /dev/null 2>&1
+    if [ ! -p "/tmp/cwatch-nosub" ];then
+      die "could not create pipe"
+    fi
+    exec 3<> "/tmp/cwatch-nosub"
   fi
-  exec 3<> "/tmp/cwatch-nosub"
   if "${subholder[@]}" 2> /dev/null  1>&3;then
     read -u3 sub_result
-    exec 3>&-
-    rm -f "/tmp/cwatch-nosub" > /dev/null 2>&1
     return 0
   fi
-  exec 3>&-
-  rm -f "/tmp/cwatch-nosub" > /dev/null 2>&1
   return 1
 }
 
@@ -182,7 +196,6 @@ if [ "${#directories[@]}" -eq 0 ];then
 fi
 infoformat "watching directories: ${directories[@]}"
 let running=1
-name=
 last_modified=
 previous_modified=
 if ! which stat > /dev/null 2>&1;then
@@ -194,8 +207,9 @@ while (( "$running" ));do
     if [ -d "$directory" ];then
       for file in "$directory"/*;do
 	if [ -e "$file" ];then
-	  name="${file##*/}"
-	  name="${name%.*}"
+	  if ! parse_file_path "$file";then
+	    die "could not parse file path"
+	  fi
 	  if sub stat -f "%Sm" -t %s "$file";then
 	    last_modified="$sub_result"
 	  else
@@ -205,37 +219,58 @@ while (( "$running" ));do
 	  if [ -z "$last_modified" ];then
 	    let last_modified=0
 	  fi
-	  if [ ! -f "$lock_dir/$name.mod" ];then
-	    echo "$last_modified" > "$lock_dir/$name.mod"
-	    echo "$file" > "$lock_dir/$name.dest"
+	  if [ ! -d "$lock_dir/$parsed_directory_path" ];then
+	    mkdir -p "$lock_dir/$parsed_directory_path" > /dev/null 2>&1
+	    if [ ! -d "$lock_dir/$parsed_directory_path" ];then
+	      die "could not create lock directory"
+	    fi
+	  fi
+	  if [ ! -f "$lock_dir/$parsed_file_path.mod" ];then
+	    echo "$last_modified" > "$lock_dir/$parsed_file_path.mod"
+	    echo "$file" > "$lock_dir/$parsed_file_path.dest"
 	    echo "new file -> $file"
 	  else
-	    previous_modified=$(cat "$lock_dir/$name.mod")
+	    if sub cat "$lock_dir/$parsed_file_path.mod";then
+	      previous_modified="$sub_result"
+	    else
+	      die "could not read lock date"
+	    fi
+	    #previous_modified=$(cat "$lock_dir/$name.mod")
 	    let mod_diff=$((last_modified - previous_modified))
 	    if [ $mod_diff -gt 0 ];then
 	      echo "changed -> $file"
 	    fi
-	    echo "$last_modified" > "$lock_dir/$name.mod"
+	    echo "$last_modified" > "$lock_dir/$parsed_file_path.mod"
 	  fi
 	fi
       done
     fi
   done
   #check deleted
-  for lock_dest in "$lock_dir"/*.dest;do
-    if [ -f "$lock_dest" ];then
-      dest=$(cat "$lock_dest")
-      if [ ! -e "$dest" ];then
-	name="${lock_dest##*/}"
-	name="${name%.*}"
-	echo "deleted -> $dest"
-	rm -f "$lock_dest" > /dev/null 2>&1
-	rm -f "$lock_dir/$name.mod" > /dev/null 2>&1
-	#run deleted commands
-	for delcom in "${delete_commands[@]}";do
-	  infoformat "running $delcom"
-	done
-      fi
-    fi
-  done
+  #  for lock_dest in "$lock_dir"/*.dest;do
+  #    if [ -f "$lock_dest" ];then
+  #      if sub cat "$lock_dest";then
+  #	dest="$sub_result"
+  #      else
+  #	die "could not get dest file"
+  #      fi
+  #      #dest=$(cat "$lock_dest")
+  #      if [ ! -e "$dest" ];then
+  #	
+  #	name="${lock_dest##*/}"
+  #	name="${name%.*}"
+  #	if parse_file_path "$lock_dest";then
+  #	  rm -f "$parsed_file_path.mod"
+  #	  rm -f "$parsed_file_path.dest"
+  #	fi
+  #	echo "deleted -> $dest"
+  #	#rm -f "$lock_dest" > /dev/null 2>&1
+  #	#rm -f "$lock_dir/$name.mod" > /dev/null 2>&1
+  #	#run deleted commands
+  #	for delcom in "${delete_commands[@]}";do
+  #	  infoformat "running $delcom"
+  #	done
+  #      fi
+  #    fi
+  #  done
 done
