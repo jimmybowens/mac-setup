@@ -1,12 +1,25 @@
 #!/bin/bash
 let error_status=0
 declare -a subholder
+declare -a allcommands=(--directories --commands-for-deleted --commands-for-new --commands-for-changed)
+declare -a delete_commands
 dieformat()
 {
   if [ -t 2 ];then
     echo -ne "\033[4;31mERROR\033[0m: " >&2
   else
     echo -ne "ERROR: " >&2
+  fi
+  if [ $# -gt 0 ];then
+    echo "$*" >&2
+  fi
+}
+infoformat()
+{
+  if [ -t 2 ];then
+    echo -ne "\033[4;32mINFO\033[0m: " >&2
+  else
+    echo -ne "INFO: " >&2
   fi
   if [ $# -gt 0 ];then
     echo "$*" >&2
@@ -31,6 +44,21 @@ cleanup_exit()
 }
 trap cleanup_with_errors SIGHUP SIGTERM SIGINT SIGPIPE
 trap cleanup_exit EXIT
+
+iscommand()
+{
+  if [ $# -eq 0 ];then
+    return 1
+  elif [ $# -gt 1 ];then
+    die "one command at a time"
+  fi
+  for ca in "${allcommands[@]}";do
+    if [ "$ca" == "$1" ];then
+      return 0
+    fi
+  done
+  return 1
+}
 
 dep(){
   dep_result=
@@ -105,38 +133,54 @@ fi
 
 while (( $# ));do
   if [ -z "$1" ];then
-    echo "ERROR: cannot use empty params"
-    exit 1
-  elif [ "$1" == '-d' ];then
+    die "cannot use empty params"
+  elif [ "$1" == '--directories' ];then
     shift
     if [ -z "$1" ];then
-      echo "ERROR: no values entered for directories"
-      exit 1
+      die "no values entered for directories"
     fi
     while (( $# ));do
       if [ -z "$1" ];then
-	echo "ERROR: cannot use empty params"
-	exit 1
-      elif [ "$1" == '-d' ];then
+	die "cannot use empty params"
+      elif iscommand "$1";then
 	break
       elif [ ! -d "$1" ];then
-	echo "ERROR: $1 is not a directory"
-	exit 1
+	die "$1 is not a directory"
       else
-	directories+=("$1");
+	if [ "$1" == '.' ];then
+	  directories+=("$PWD")
+	else
+	  directories+=("$1");
+	fi
+	shift
+      fi
+    done
+  elif [ "$1" == '--commands-for-deleted' ];then
+    shift
+    if [ -z "$1" ];then
+      die "no values entered for deleted commands"
+    fi
+    while (( $# ));do
+      if [ -z "$1" ];then
+	die "cannot use empty params"
+      elif iscommand "$1";then
+	break
+      elif ! dep "$1";then
+	die "$1 is not a valid command"
+      else
+	delete_commands+=("$1")
 	shift
       fi
     done
   else
-    echo "ERROR: invalid command $1"
-    exit 1
+    die "invalid command $1"
   fi
 done
 
 if [ "${#directories[@]}" -eq 0 ];then
   directories+=("$PWD")
 fi
-
+infoformat "watching directories: ${directories[@]}"
 let running=1
 name=
 last_modified=
@@ -170,9 +214,6 @@ while (( "$running" ));do
 	    let mod_diff=$((last_modified - previous_modified))
 	    if [ $mod_diff -gt 0 ];then
 	      echo "changed -> $file"
-	      if ! sudo $BIN_BUILD -d "$directory";then
-		die "could not build bin"
-	      fi
 	    fi
 	    echo "$last_modified" > "$lock_dir/$name.mod"
 	  fi
@@ -190,6 +231,10 @@ while (( "$running" ));do
 	echo "deleted -> $dest"
 	rm -f "$lock_dest" > /dev/null 2>&1
 	rm -f "$lock_dir/$name.mod" > /dev/null 2>&1
+	#run deleted commands
+	for delcom in "${delete_commands[@]}";do
+	  infoformat "running $delcom"
+	done
       fi
     fi
   done
