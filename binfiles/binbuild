@@ -1,13 +1,42 @@
 #!/bin/bash
+while (( $# ));do
+  if [ -z "$1" ];then
+    echo "ERROR: cannot use empty params"
+    exit 1
+  elif [ "$1" == '-d' ];then
+    shift
+    if [ -z "$1" ];then
+      echo "ERROR: no value entered for working directory"
+      exit 1
+    fi
+    if [ ! -d "$1" ];then
+      echo "ERROR: must be a directory, got $1"
+      exit 1
+    fi
+    if [ "$1" == '.' ];then
+      #expand
+      CURR_DIRECTORY="$PWD"
+    else
+      CURR_DIRECTORY="$1"
+    fi
+    shift
+  else
+    echo "ERROR: invalid param $1"
+    exit 1
+  fi
+done
+if [ -z "$CURR_DIRECTORY" ];then
+  CURR_DIRECTORY="$PWD"
+fi
 declare -a objects
-INC_DIR="$PWD/include"
-SRC_DIR="$PWD/src"
-BUILD_DIR="$PWD/build"
-BIN_DIR="$PWD/bin"
-LOCK_DIR="$PWD/lock"
+INC_DIR="$CURR_DIRECTORY/include"
+SRC_DIR="$CURR_DIRECTORY/src"
+BUILD_DIR="$CURR_DIRECTORY/build"
+BIN_DIR="$CURR_DIRECTORY/bin"
+LOCK_DIR="$CURR_DIRECTORY/lock"
 BIN_INSTALL_DIR="/usr/local/bin"
 CURR_USER=$(whoami)
-BINNAME="${PWD##*/}"
+BINNAME="${CURR_DIRECTORY##*/}"
 let BUILD_ERROR_COUNT=0
 if [ -z "$CURR_USER" ];then
   echo "cannot get current user"

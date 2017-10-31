@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+if [ "$#" -ne 2 ];then
+    echo "needs disk number and image file"
+    exit 1
+elif [ -z "$1" ];then
+    echo "empty number"
+    exit 1
+elif [ -z "$2" ];then
+    echo "empty image"
+    exit 1
+elif [ ! -f "$2" ];then
+    echo "invalid image file"
+    exit 1
+fi
+
+echo "preparing $1..."
+
+diskutil eraseDisk "MS-DOS FAT32" PI /dev/disk"$1" > /dev/null 2>&1
+if [ $? -ne 0 ];then
+  echo "couldn't erase drive"
+  exit 1
+fi
+diskutil unmountDisk /dev/disk"$1" > /dev/null 2>&1
+if [ $? -ne 0 ];then
+  echo "couldn't unmount drive"
+  exit 1
+fi
+dd bs=1m if="$2" of=/dev/rdisk"$1" > /dev/null 2>&1
+if [ $? -ne 0 ];then
+  echo "coudn't copy files"
+  exit 1
+fi
+diskutil eject /dev/disk"$1" > /dev/null 2>&1
+if [ $? -ne 0 ];then
+  echo "couldn't eject drive"
+  exit 1
+fi
+echo "done"
+exit 0
