@@ -1,4 +1,5 @@
 "set foldmethod=indent
+set tags=/usr/local/include/tags
 set showmatch
 set matchtime=15
 iabbrev #i #include<><esc>i
@@ -6,7 +7,7 @@ iabbrev #d #define
 iabbrev ' ''<esc>i
 iabbrev " ""<esc>i
 iabbrev if if()<cr>{<cr><cr>}<esc>bbba
-iabbrev { {}<esc>i
+iabbrev { {<cr>}<esc>O
 iabbrev ( ()<esc>i
 iabbrev [ []<esc>i
 iabbrev sizeof sizeof()<esc>i
@@ -16,7 +17,7 @@ iabbrev default default:<cr>
 iabbrev for for(;;)<cr>{<cr><cr>}<esc>bbba
 iabbrev while while()<cr>{<cr><cr>}<esc>bbba
 iabbrev do do<cr>{<cr><cr>}while();<esc>ba
-iabbrev else else<cr>{<cr><cr>}<esc>bi
+iabbrev else else<cr>{<cr>}<esc>O
 iabbrev elseif else if()<cr>{<cr><cr>}<esc>bbba
 iabbrev switch switch()<cr>{<cr><cr>}<esc>bbba
 iabbrev case case:<esc>i

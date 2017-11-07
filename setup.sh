@@ -151,6 +151,7 @@ source \$ZSH/oh-my-zsh.sh
 export LANG=en_US.UTF-8
 export EDITOR='vim'
 export SSH_KEY="$HOME/.ssh/rsa_id"
+export HOMEBREW_NO_ANALYTICS=1
 PATH=:$PATH
 EOF
 echo "done"

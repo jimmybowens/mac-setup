@@ -1,0 +1,89 @@
+#!/bin/bash
+. "$HOME/mac-setup/binfiles/functions"
+end_with_errors()
+{
+  die "an error has occured...aborting!"
+}
+end()
+{
+  exit $error_status
+}
+trap end_with_errors SIGHUP SIGTERM SIGINT SIGPIPE
+trap end EXIT
+if ! isroot;then
+  die "must run with root permissions, got user $root"
+fi
+while [ $# -gt 0 ];do
+  if [ -z "$1" ];then
+    die "cannot use empty params"
+  elif [ "$1" == '-d' ];then
+    shift
+    if [ -z "$1" ];then
+      die "no value entered for current directory specified with -d"
+    elif [ ! -d "$1" ];then
+      die "must be a directory, got $1"
+    fi
+    if [ "$1" == '.' ];then
+      CURR_DIRECTORY="$PWD"
+    else
+      CURR_DIRECTORY="$1"
+    fi
+    shift
+  else
+    die "invalid param: $1"
+  fi
+done
+if [ -z "$CURR_DIRECTORY" ];then
+  CURR_DIRECTORY="$PWD"
+fi
+INC_DIR="$CURR_DIRECTORY/include"
+SRC_DIR="$CURR_DIRECTORY/src"
+BUILD_DIR="$CURR_DIRECTORY/build"
+BIN_DIR="$CURR_DIRECTORY/bin"
+LOCK_DIR="$CURR_DIRECTORY/lock"
+BIN_INSTALL_DIR="/usr/local/bin"
+BINNAME="${CURR_DIRECTORY##*/}"
+MAIN=
+let MAIN_COUNT=0
+let BUILD_COUNT=0
+let ERROR_COUNT=0
+if [ ! -d "$INC_DIR" ] || [ ! -d "$SRC_DIR" ];then
+  die "$BINNAME is not a C project"
+fi
+if ! make_directories "$BUILD_DIR" "$LOCK_DIR" "$BIN_DIR";then
+  die "could not make required directories"
+fi
+if ! which stat > /dev/null 2>&1;then
+  die "stat is not installed"
+fi
+for s in "$SRC_DIR"/*.c;do
+  if [ -f "$s" ];then
+    if grep 'int main' "$s" > /dev/null 2>&1;then
+      let MAIN_COUNT++
+      MAIN="$s"
+      infoformat "found main in $MAIN"
+      if [ "$MAIN_COUNT" -gt 1 ];then
+	dieformat "duplicate mains detected"
+      fi
+    fi
+    if parse_file_path "$s";then
+      last_modified_date=$(stat -f "%Sm" -t %s $s 2> /dev/null)
+      if ! make_directories "$LOCK_DIR/$parsed_directory_path";then
+	die "could not created lock directory"
+      fi
+      if [ ! -f "$LOCK_DIR/$parsed_file_path.mod" ];then
+	gcc -I "$INC_DIR" -c "$s" -o "$BUILD_DIR/$parsed_file_name.o"
+	if [ $? -ne 0 ];then
+	  let ERROR_COUNT++
+	  continue
+	fi
+	echo "$last_modified_date" > "$LOCK_DIR/$parsed_file_path.mod"
+	let BUILD_COUNT++
+      fi
+    else
+      die "could not parse $s"
+    fi
+  fi
+done
+
+exit 0

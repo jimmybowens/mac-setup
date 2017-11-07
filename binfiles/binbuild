@@ -125,7 +125,7 @@ for s in "$SRC_DIR"/*.c;do
 done
 
 #if [ "$buildcount" -gt 0 ] && [ "$BUILD_ERROR_COUNT" -eq 0 ] && [ "$maincount" -eq 1 ];then
-if [ "$BUILD_ERROR_COUNT" -eq 0 ] && [ "$maincount" -eq 1 ];then
+if [ "$BUILD_ERROR_COUNT" -eq 0 ] && [ "$maincount" -eq 1 ] && [ "$buildcount" -gt 0 ];then
   for o in "$BUILD_DIR"/*.o;do
     if [ -e "$o" ];then
       #skip files whose source files have been deleted
@@ -140,10 +140,26 @@ if [ "$BUILD_ERROR_COUNT" -eq 0 ] && [ "$maincount" -eq 1 ];then
     rm -f "$BIN_DIR/$BINNAME" > /dev/null 2>&1
   fi
   if [ "${#objects[@]}" -gt 0 ];then
-    gcc -o "$BIN_DIR/$BINNAME" "${objects[@]}"
+    gcc -Wall -lclib -o "$BIN_DIR/$BINNAME" "${objects[@]}"
+    if [ -e "$BIN_DIR/$BINNAME" ];then
+      echo "INFO: executable created at $BIN_DIR/$BINNAME"
+    fi
   fi
 else
-  echo "ERROR: refusing to build binfile, no main file or multiple main files detected or errors present"
+  if [ "$BUILD_ERROR_COUNT" -ne 0 ];then
+    echo "ERROR: refusing to build binfile because errors present"
+  elif [ "$maincount" -ne 1 ];then
+    echo "ERROR: refusing to build binfile because of problems with main function"
+  else
+    if [ ! -e "$BIN_DIR/$BINNAME" ];then
+      if [ "${#objects[@]}" -gt 0 ];then
+	gcc -Wall -lclib -o "$BIN_DIR/$BINNAME" "${objects[@]}"
+	if [ -e "$BIN_DIR/$BINNAME" ];then
+	  echo "INFO: executable created at $BIN_DIR/$BINNAME"
+	fi
+      fi
+    fi
+  fi
 fi
 
 if [ -z "$main" ];then
@@ -156,9 +172,5 @@ fi
 if [ "$BUILD_ERROR_COUNT" -gt 0 ];then
   echo "ERROR: finished building with $BUILD_ERROR_COUNT errors"
 else
-  if [ -e "$BIN_DIR/$BINNAME" ];then
-    echo "INFO: executable created at $BIN_DIR/$BINNAME"
-  fi
   echo "INFO: finished building"
 fi
-exit 0

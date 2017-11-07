@@ -1,5 +1,11 @@
 #!/bin/bash
-
+#TODO
+while (( $# ));do
+  if [ -z "$1" ];then
+    echo "ERROR: cannot use empty params"
+  fi
+  shift
+done
 declare -a objects
 INC="$PWD/include"
 SRC="$PWD/src"
@@ -48,6 +54,16 @@ fi
 if [ ! -d "$LIB" ];then
   exit 1
 fi
+if [ -d "$INCLUDE_INSTALL_DIR/$libname" ];then
+  rm -rf "$INCLUDE_INSTALL_DIR/$libname"
+  if [ $? -ne 0 ];then
+    exit 1
+  fi
+fi
+cp -a "$INC" "$INCLUDE_INSTALL_DIR/$libname"
+if [ $? -ne 0 ];then
+  exit 1
+fi
 for s in $source_files;do
   if [ -f "$s" ];then
     name="${s##*/}"
@@ -63,7 +79,7 @@ done
 if [ "${#objects[@]}" -eq 0 ];then
   exit 0
 fi
-gcc -shared -W1,-soname,"$soname" -o "$LIB/$outputname" "${objects[@]}"
+gcc -shared -W1,-soname,"$soname" -Wall -o "$LIB/$outputname" "${objects[@]}"
 if [ -f "$LIB_INSTALL_DIR/$outputname" ];then
   rm -f "$LIB_INSTALL_DIR/$outputname"
   if [ $? -ne 0 ];then
@@ -88,14 +104,4 @@ if [ $? -ne 0 ];then
 fi
 ln -s "$LIB_INSTALL_DIR/$outputname" "$LIB_INSTALL_DIR/$soname"
 ln -s "$LIB_INSTALL_DIR/$soname" "$LIB_INSTALL_DIR/$linkername"
-if [ -d "$INCLUDE_INSTALL_DIR/$libname" ];then
-  rm -rf "$INCLUDE_INSTALL_DIR/$libname"
-  if [ $? -ne 0 ];then
-    exit 1
-  fi
-fi
-cp -a "$INC" "$INCLUDE_INSTALL_DIR/$libname"
-if [ $? -ne 0 ];then
-  exit 1
-fi
 exit 0
